@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source /home/virtual_envs/ml/bin/activate
-
 nvidia-smi
 
 echo "This cannot be run without the original dataset."

@@ -19,7 +19,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import cv2
 from PIL import Image
-from dataHelper import DatasetFolder
+from dataHelper import DatasetFolder, DatasetFolder_WithReplacement
 import re
 from skimage.transform import resize
 import model
@@ -40,6 +40,9 @@ from pathlib import Path
 from matplotlib.pyplot import imsave, imread
 from skimage.color import rgb2hsv, hsv2rgb
 from copy import copy
+from tqdm import tqdm
+
+f_map_location = lambda storage, loc: storage.cuda(torch.cuda.current_device())
 
 def highlighting_precision(dataloader, # can be train, test, train_finer, test_finer
                             prototype_network_parallel, # pytorch network with prototype_vectors
@@ -56,12 +59,15 @@ def highlighting_precision(dataloader, # can be train, test, train_finer, test_f
 
     n_prototypes = prototype_network_parallel.module.num_prototypes
 
+    if debug_mode:
+        print('Running activation precision for {} prototypes and {} classes'.format(n_prototypes, dataloader.dataset.class_to_idx))
+
     precisions = []
 
     per_proto_hp = defaultdict(list)
 
     for idx, (search_batch_input, search_y, patient_id) in enumerate(dataloader):
-        print('batch {}'.format(idx))
+        #print('batch {}'.format(idx))
         if preprocess_input_function is not None:
             # print('preprocessing input for pushing ...')
             # search_batch = copy.deepcopy(search_batch_input)
@@ -75,7 +81,7 @@ def highlighting_precision(dataloader, # can be train, test, train_finer, test_f
         if debug_mode:
             print("search_batch:", search_batch.shape)
             print("fine_anno:", fine_anno.shape)
-            print("search_y.shape, sy[0]:", search_y.shape, search_y[0])
+            print("search_y.shape, sy[0]:", search_y.shape, search_y)
             print("fine_anno[0][0][0][0]: ", fine_anno[0][0][0][0])
             print("fine_anno[0][0][122][122]: ", fine_anno[0][0][122][122])
 
@@ -96,8 +102,15 @@ def highlighting_precision(dataloader, # can be train, test, train_finer, test_f
         # confirm prototype class identity
         load_img_dir = os.path.join(load_model_dir, 'img')
 
-        prototype_info = np.load(os.path.join(load_img_dir, 'epoch-'+epoch_number_str, 'bb'+epoch_number_str+'.npy'))
-        prototype_img_identity = prototype_info[:, -1]
+        n_protos = ppnet.prototype_shape[0]
+        #prototype_info = np.load(os.path.join(load_img_dir, 'epoch-'+epoch_number_str, 'bb'+epoch_number_str+'.npy'))
+        #prototype_img_identity = prototype_info[:, -1]
+        prototype_order = ['Circumscribed', 'Indistinct', 'Spiculated']
+        expansion = n_protos // len(prototype_order)
+        
+        prototype_img_identity = []
+        for clz in prototype_order:
+            prototype_img_identity.extend([dataloader.dataset.class_to_idx[clz]] * expansion)
 
         if debug_mode:
             log('Prototypes are chosen from ' + str(len(set(prototype_img_identity))) + ' number of classes.')
@@ -134,8 +147,8 @@ def highlighting_precision(dataloader, # can be train, test, train_finer, test_f
                     denom = np.sum(mask)
                     num = np.sum(mask * fine_anno_[img_idx][0])
 
-                    if debug_mode and False:
-                        print(f"hp is: {num/denom}")
+                    if debug_mode:
+                        print(f"img:{img_idx} proto:{j}, img:{search_y[img_idx]}=={prototype_img_identity[j]}:proto, hp is: {num/denom}")
                     precisions.append(num/denom)
                     per_proto_hp[j].append(num/denom)
     if per_proto:
@@ -190,6 +203,7 @@ def highlighting_precision_visualization(dataloader, # can be train, test, train
         orig_img = np.copy(orig_img.detach().cpu().numpy())
         fine_anno = 1 - search_batch_input[:, 3:, : , :]
 
+        
         if debug_mode:
             print("search_batch:", search_batch.shape)
             print("fine_anno:", fine_anno.shape)
@@ -312,7 +326,7 @@ def highlighting_precision_visualization(dataloader, # can be train, test, train
     else:
         return np.average(np.asarray(precisions))
 
-def hp(test_dir, load_model_path, per_proto=False, verbose=False):
+def hp(test_dir, load_model_path, per_proto=False, verbose=False, num_bootstraps=None, classmap=None):
 
     pathlib_path_load_model_path = Path(load_model_path)
     load_model_name = pathlib_path_load_model_path.parts[-1]
@@ -324,10 +338,10 @@ def hp(test_dir, load_model_path, per_proto=False, verbose=False):
     epoch_number_str = mo.group('epoch')
 
     if verbose:
-        print('load model from ' + load_model_path)
-        print('test set directory: ' + test_dir)
+        print('load model from ' + str(load_model_path))
+        print('test set directory: ' + str(test_dir))
     
-    ppnet = torch.load(load_model_path)
+    ppnet = torch.load(load_model_path, map_location=f_map_location)
     ppnet = ppnet.cuda()
     ppnet_multi = torch.nn.DataParallel(ppnet)
 
@@ -341,37 +355,75 @@ def hp(test_dir, load_model_path, per_proto=False, verbose=False):
                                  std=std)
     test_batch_size = 100
 
-    test_dataset = DatasetFolder(
-        test_dir,
-        augmentation=False,
-        loader=np.load,
-        extensions=("npy",),
-        transform=transforms.Compose([
-            torch.from_numpy,
-        ])
-        )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=test_batch_size, shuffle=True,
-        num_workers=4, pin_memory=False)
-    if verbose:
-        print('test set size: {0}'.format(len(test_loader.dataset)))
+    if num_bootstraps is None:
+        test_dataset = DatasetFolder(
+            test_dir,
+            augmentation=False,
+            loader=np.load,
+            extensions=("npy",),
+            transform=transforms.Compose([
+                torch.from_numpy,
+            ]),
+            classmap=classmap
+            )
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset, batch_size=test_batch_size, shuffle=True,
+            num_workers=4, pin_memory=False)
+        if verbose:
+            print('test set size: {0}'.format(len(test_loader.dataset)))
 
-    if verbose:
-        accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
-                        class_specific=class_specific, log=print)
-        print('accu', str(accu))
+        if verbose:
+            accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
+                            class_specific=class_specific, log=print)
+            print('accu', str(accu))
 
-    # get hp
-    return (highlighting_precision(dataloader=test_loader, # can be train, test, train_finer, test_finer
-                                prototype_network_parallel=ppnet_multi, # pytorch network with prototype_vectors
-                                ppnet=ppnet,
-                                load_model_dir=load_model_dir,
-                                epoch_number_str=epoch_number_str,
-                                preprocess_input_function=None,
-                                log=silent_print,
-                                prototype_activation_function_in_numpy=None,
-                                debug_mode=False,
-                                per_proto=per_proto))
+        # get hp
+        return (highlighting_precision(dataloader=test_loader, # can be train, test, train_finer, test_finer
+                                    prototype_network_parallel=ppnet_multi, # pytorch network with prototype_vectors
+                                    ppnet=ppnet,
+                                    load_model_dir=load_model_dir,
+                                    epoch_number_str=epoch_number_str,
+                                    preprocess_input_function=None,
+                                    log=silent_print,
+                                    prototype_activation_function_in_numpy=None,
+                                    debug_mode=False,
+                                    per_proto=per_proto))
+    else:
+        res = []
+        for b in tqdm(range(num_bootstraps)):
+            test_dataset = DatasetFolder_WithReplacement(
+                test_dir,
+                augmentation=False,
+                loader=np.load,
+                extensions=("npy",),
+                transform=transforms.Compose([
+                    torch.from_numpy,
+                ]),
+                classmap=classmap
+                )
+            test_loader = torch.utils.data.DataLoader(
+                test_dataset, batch_size=test_batch_size, shuffle=True,
+                num_workers=4, pin_memory=False)
+            if verbose:
+                print('test set size: {0}'.format(len(test_loader.dataset)))
+
+            if verbose:
+                accu = tnt.test(model=ppnet_multi, dataloader=test_loader,
+                                class_specific=class_specific, log=print)
+                print('accu', str(accu))
+
+            # get hp
+            res.append(highlighting_precision(dataloader=test_loader, # can be train, test, train_finer, test_finer
+                                        prototype_network_parallel=ppnet_multi, # pytorch network with prototype_vectors
+                                        ppnet=ppnet,
+                                        load_model_dir=load_model_dir,
+                                        epoch_number_str=epoch_number_str,
+                                        preprocess_input_function=None,
+                                        log=silent_print,
+                                        prototype_activation_function_in_numpy=None,
+                                        debug_mode=False,
+                                        per_proto=per_proto))
+        return res
 
 def get_highlighting_precision(test_dir, load_model_dir, load_model_name, per_proto=False, viz=False):
 

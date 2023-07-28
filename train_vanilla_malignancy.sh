@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source /home/virtual_envs/ml/bin/activate
-
 nvidia-smi
 
 srun -u python vanilla_vgg.py -model="vgg16"  \

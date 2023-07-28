@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source /home/virtual_envs/ml/bin/activate
-
 echo "start running"
 
 nvidia-smi

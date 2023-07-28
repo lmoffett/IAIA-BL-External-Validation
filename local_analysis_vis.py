@@ -15,13 +15,13 @@ classname_dict[0] = "circumscribed"
 classname_dict[1] = "indistinct"
 classname_dict[2] = "spiculated"
 
-def main():
+def main(source_dir, save_name='all_classs.png'):
     # get dir
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-local_analysis_directory', nargs=1, type=str, default='0')
-    args = parser.parse_args()
+    #parser = argparse.ArgumentParser()
+    #parser.add_argument('-local_analysis_directory', nargs=1, type=str, default='0')
+    #args = parser.parse_args()
 
-    source_dir = args.local_analysis_directory[0]
+    #source_dir = args.local_analysis_directory[0]
 
     os.makedirs(os.path.join(source_dir, 'visualizations_of_expl'), exist_ok=True)
 
@@ -122,7 +122,7 @@ def main():
     save_loc1 = os.path.join(source_dir, 'visualizations_of_expl') + f'/all_class.png'
     plt.savefig(save_loc1, bbox_inches='tight', pad_inches=0)
     os.makedirs('./visualizations_of_expl/', exist_ok=True)
-    save_loc2 = './visualizations_of_expl/' + str(source_dir.replace('/', '__'))[len('__usr__xtmp__IAIABL__saved_models__0129_pushonall_topkk=9_fa=0.001_random=4__pruned_prototypes_epoch50_k6_pt3__'):] + f'all_class.png'
+    save_loc2 = './visualizations_of_expl/' + save_name#str(source_dir.replace('/', '__'))[len('__usr__xtmp__IAIABL__saved_models__0129_pushonall_topkk=9_fa=0.001_random=4__pruned_prototypes_epoch50_k6_pt3__'):] + f'all_class.png'
     shutil.copy2(save_loc1, save_loc2)
     print(f"Saved in {save_loc2}")
     return

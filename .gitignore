@@ -1,0 +1,8 @@
+*.png
+*.txt
+*.csv
+.ipynb_checkpoints/
+env_setup/
+*.zip
+__pycache__/
+__MACOSX/
