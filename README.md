@@ -24,6 +24,11 @@ Run `Baseline-Logits.ipynb` to test you environment gives you the same logits at
 
 ## Model Weights
 
+## Replicating on EMBED Open Data
+TODO
+
+Run `python extract_rois_embed.py`
+
 ## References
 
 [1] Barnett, Alina Jade, et al. "A case-based interpretable deep learning model for classification of mass lesions in digital mammography." Nature Machine Intelligence 3.12 (2021): 1061-1070.

@@ -120,7 +120,7 @@ class ExternalValidationContext():
         return dataset, loader
 
 
-    def classwise_activation_precision_for_protopnets(self, num_bootstraps=NUM_BOOTSTRAPS):
+    def classwise_activation_precision_for_protopnets(self, num_bootstraps=NUM_BOOTSTRAPS, bootstrap_force_all_classes=False):
 
         np.random.seed(0)
         torch.random.manual_seed(0)
@@ -133,7 +133,8 @@ class ExternalValidationContext():
                     m,
                     per_proto=True,
                     num_bootstraps=num_bootstraps,
-                    verbose=False)
+                    verbose=False,
+                    bootstrap_force_all_classes=bootstrap_force_all_classes)
 
 
             res_list_protop_np = np.array(res_list_protop)
@@ -324,7 +325,7 @@ class ExternalValidationContext():
 
                 if subgroup == 'all':
                     queried_df = scoped_df
-                elif subgroup in ('manufacturer', 'age_3_bucket', 'age_2_bucket', 'race'):
+                elif subgroup in ('manufacturer', 'age_3_bucket', 'age_2_bucket', 'race', 'ethnicity'):
                     queried_df = scoped_df[scoped_df[subgroup] == query]
                 else:
                     raise ValueError(subgroup)
@@ -367,7 +368,7 @@ class ExternalValidationContext():
         return roc_df, ci_df
 
 
-    def run_gradcams(self, num_bootstraps=NUM_BOOTSTRAPS, debug_mode=False):
+    def run_gradcams(self, num_bootstraps=NUM_BOOTSTRAPS, debug_mode=False, bootstrap_force_all_classes=False):
         grad_cam_path = self.external_validation_path / 'grad_cam'
         grad_cam_path.mkdir(exist_ok=True)
         
@@ -376,7 +377,8 @@ class ExternalValidationContext():
                     per_class=True,
                     save_location=str(grad_cam_path/ f'{self.data_path.stem}-tmp.png'),
                     classmap=self.classmap,
-                    num_bootstraps=num_bootstraps)
+                    num_bootstraps=num_bootstraps,
+                    bootstrap_force_all_classes=bootstrap_force_all_classes,)
 
         ci_df = pd.DataFrame()
         for method_margin, ap, ci_lower, ci_upper in aps_all:

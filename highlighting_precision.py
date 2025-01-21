@@ -133,6 +133,7 @@ def highlighting_precision(dataloader, # can be train, test, train_finer, test_f
                 # for each proto
                 if prototype_img_identity[j] == search_y[img_idx]:
                     # if proto class matches img class
+                    
 
                     activation_map_ = activation_map[j]
                     threshold = np.percentile(activation_map_, percentile)
@@ -326,7 +327,7 @@ def highlighting_precision_visualization(dataloader, # can be train, test, train
     else:
         return np.average(np.asarray(precisions))
 
-def hp(test_dir, load_model_path, per_proto=False, verbose=False, num_bootstraps=None, classmap=None):
+def hp(test_dir, load_model_path, per_proto=False, verbose=False, num_bootstraps=None, classmap=None, bootstrap_force_all_classes=False):
 
     pathlib_path_load_model_path = Path(load_model_path)
     load_model_name = pathlib_path_load_model_path.parts[-1]
@@ -390,7 +391,8 @@ def hp(test_dir, load_model_path, per_proto=False, verbose=False, num_bootstraps
                                     per_proto=per_proto))
     else:
         res = []
-        for b in tqdm(range(num_bootstraps)):
+        b = 0
+        while b < num_bootstraps:
             test_dataset = DatasetFolder_WithReplacement(
                 test_dir,
                 augmentation=False,
@@ -412,8 +414,9 @@ def hp(test_dir, load_model_path, per_proto=False, verbose=False, num_bootstraps
                                 class_specific=class_specific, log=print)
                 print('accu', str(accu))
 
+            
             # get hp
-            res.append(highlighting_precision(dataloader=test_loader, # can be train, test, train_finer, test_finer
+            this_hp = highlighting_precision(dataloader=test_loader, # can be train, test, train_finer, test_finer
                                         prototype_network_parallel=ppnet_multi, # pytorch network with prototype_vectors
                                         ppnet=ppnet,
                                         load_model_dir=load_model_dir,
@@ -422,7 +425,16 @@ def hp(test_dir, load_model_path, per_proto=False, verbose=False, num_bootstraps
                                         log=silent_print,
                                         prototype_activation_function_in_numpy=None,
                                         debug_mode=False,
-                                        per_proto=per_proto))
+                                        per_proto=per_proto)
+            
+            # five protos for each class or nothing 
+            if len(this_hp) == 15 or not bootstrap_force_all_classes:
+                res.append(this_hp)
+                b += 1
+            else:
+                # clean
+                if verbose:
+                    print("Bootstrapping missed classes", len(this_hp))
         return res
 
 def get_highlighting_precision(test_dir, load_model_dir, load_model_name, per_proto=False, viz=False):

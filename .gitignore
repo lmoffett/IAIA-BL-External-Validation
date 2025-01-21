@@ -6,3 +6,5 @@ env_setup/
 *.zip
 __pycache__/
 __MACOSX/
+
+.env

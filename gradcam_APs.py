@@ -24,8 +24,8 @@ from tqdm import tqdm
 
 f_map_location = lambda storage, loc: storage.cuda(torch.cuda.current_device())
 
-def gradcam_aps_main(test_dir='/usr/xtmp/IAIABL/Lo1136i/test/', model_path = '/usr/xtmp/IAIABL/saved_models/vanilla/0125_vanilla_3margin_vgg16_latent512_baseline3_random=4/0.9384582045743842_at_epoch_136',
-                    per_class=True, save_location='./gradcam/tmp.png', classmap=None, num_bootstraps=100):
+def gradcam_aps_main(test_dir=os.environ.get('TEST_DIR', None), model_path = os.environ.get('VGG_MODEL_PATH', None),
+                    per_class=True, save_location='./gradcam/tmp.png', classmap=None, num_bootstraps=100, bootstrap_force_all_classes=False):
     ## argparsing
     #parser = argparse.ArgumentParser()
     #parser.add_argument("-save_loc", type=str)
@@ -344,8 +344,19 @@ def gradcam_aps_main(test_dir='/usr/xtmp/IAIABL/Lo1136i/test/', model_path = '/u
                     for clz in clzs:
                         ap[int(clz)][i] = np.nan
 
+            i = 0
+            skipped_samples = 0
+            reported_i = 0
+            while i < num_iterations:
 
-            for i in tqdm(range(num_iterations)):
+                if (i - 1) % 5 == 0 and reported_i != i:
+                    reported_i = i
+                    print(f'Completed {i} samples.', end=' ')
+                    if bootstrap_force_all_classes:
+                        print(f'Skipped {skipped_samples} that did not include all classes.')
+                    else:
+                        print()
+
                 test_loader = torch.utils.data.DataLoader(
                         test_dataset, batch_size=1, shuffle=True,
                         num_workers=4, pin_memory=False)
@@ -357,6 +368,11 @@ def gradcam_aps_main(test_dir='/usr/xtmp/IAIABL/Lo1136i/test/', model_path = '/u
                                             log=print,
                                             debug_mode=False,
                                             per_class=per_class)
+                
+                if len(gc_res) < num_classes and bootstrap_force_all_classes:
+                    # sample did not include all classes
+                    skipped_samples += 1
+                    continue
 
                 safe_res(i, gc_res, aps)
 
@@ -370,6 +386,8 @@ def gradcam_aps_main(test_dir='/usr/xtmp/IAIABL/Lo1136i/test/', model_path = '/u
                                                 per_class=per_class)
 
                 safe_res(i, gpp_res, aps_pp)
+
+                i += 1
 
             vois = []
             for j in range(num_classes):
